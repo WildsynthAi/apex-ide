@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APEX UNIVERSE | Sovereign Local IDE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00f5ff;
+            --green: #00ff9d;
+            --amber: #ffaa00;
+            --red: #ff3366;
+            --purple: #b44fff;
+            --bg: #050508;
+            --panel: #0a0c12;
+            --border: rgba(0, 245, 255, 0.2);
+            --glow-cyan: 0 0 20px rgba(0,245,255,0.5), 0 0 60px rgba(0,245,255,0.2);
+            --glow-green: 0 0 20px rgba(0,255,157,0.5), 0 0 60px rgba(0,255,157,0.2);
+            --glow-amber: 0 0 20px rgba(255,170,0,0.5);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--cyan);
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+            cursor: crosshair;
+        }
+
+        /* SCANLINE OVERLAY */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.08) 2px,
+                rgba(0,0,0,0.08) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* GRID BACKGROUND */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* TOP STATUS BAR */
+        .topbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 36px;
+            background: rgba(0,245,255,0.04);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 1000;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+        }
+
+        .topbar-left { display: flex; gap: 20px; align-items: center; }
+        .topbar-right { display: flex; gap: 20px; align-items: center; }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .dot.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation-delay: 0.5s; }
+        .dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); animation-delay: 1s; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .topbar-clock {
+            color: var(--amber);
+            font-family: 'Orbitron', monospace;
+            font-size: 0.65rem;
+        }
+
+        /* SIDE PANELS */
+        .side-panel {
+            position: fixed;
+            top: 36px;
+            width: 200px;
+            height: calc(100vh - 36px);
+            border-right: 1px solid var(--border);
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .side-panel.right {
+            right: 0;
+            left: auto;
+            border-right: none;
+            border-left: 1px solid var(--border);
+        }
+
+        .side-label {
+            font-size: 0.6rem;
+            color: rgba(0,245,255,0.4);
+            letter-spacing: 3px;
+            padding: 8px 15px 4px;
+            text-transform: uppercase;
+        }
+
+        .side-item {
+            padding: 8px 15px;
+            font-size: 0.68rem;
+            color: rgba(0,245,255,0.6);
+            border-left: 2px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+
+        .side-item:hover, .side-item.active {
+            color: var(--cyan);
+            border-left-color: var(--cyan);
+            background: rgba(0,245,255,0.05);
+        }
+
+        .side-item.active { border-left-color: var(--green); color: var(--green); }
+
+        /* MINI GRAPH */
+        .mini-graph {
+            margin: 15px;
+            height: 50px;
+            border: 1px solid rgba(0,245,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .mini-graph canvas { width: 100%; height: 100%; }
+
+        /* MAIN CONTENT */
+        .main {
+            margin: 36px 200px 0;
+            min-height: calc(100vh - 36px);
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 60px;
+        }
+
+        /* HERO SECTION */
+        .hero {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease forwards;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-tag {
+            font-size: 0.65rem;
+            letter-spacing: 5px;
+            color: var(--amber);
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .hero-tag::before, .hero-tag::after {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 1px;
+            background: var(--amber);
+            opacity: 0.5;
+        }
+
+        .hero-title {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(2.5rem, 5vw, 4.5rem);
+            font-weight: 900;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            line-height: 1;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #fff 0%, var(--cyan) 50%, var(--green) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            filter: drop-shadow(0 0 30px rgba(0,245,255,0.4));
+        }
+
+        .hero-sub {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.1rem;
+            letter-spacing: 6px;
+            color: rgba(0,245,255,0.5);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .hero-version {
+            font-size: 0.65rem;
+            color: var(--green);
+            letter-spacing: 3px;
+            margin-top: 10px;
+        }
+
+        /* STATUS ROW */
+        .status-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: fadeIn 1s ease 0.3s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-chip {
+            padding: 5px 14px;
+            border: 1px solid rgba(0,245,255,0.2);
+            border-radius: 2px;
+            font-size: 0.62rem;
+            letter-spacing: 2px;
+            color: rgba(0,245,255,0.6);
+            background: rgba(0,245,255,0.03);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-chip .chip-dot {
+            width: 5px; height: 5px;
+            border-radius: 50%;
+        }
+
+        .status-chip.ok .chip-dot { background: var(--green); box-shadow: 0 0 5px var(--green); }
+        .status-chip.warn .chip-dot { background: var(--amber); box-shadow: 0 0 5px var(--amber); }
+        .status-chip.info .chip-dot { background: var(--cyan); box-shadow: 0 0 5px var(--cyan); }
+
+        /* LAUNCH GRID */
+        .launch-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: 30px;
+            animation: fadeIn 1s ease 0.5s both;
+        }
+
+        .launch-card {
+            border: 1px solid var(--border);
+            background: rgba(0,10,20,0.6);
+            backdrop-filter: blur(15px);
+            border-radius: 6px;
+            padding: 24px 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .launch-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(0,245,255,0.05), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .launch-card:hover::before { opacity: 1; }
+
+        .launch-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 2px;
+            width: 0;
+            transition: width 0.4s ease;
+        }
+
+        .launch-card.cyan::after { background: var(--cyan); box-shadow: var(--glow-cyan); }
+        .launch-card.green::after { background: var(--green); box-shadow: var(--glow-green); }
+        .launch-card.amber::after { background: var(--amber); box-shadow: var(--glow-amber); }
+        .launch-card.purple::after { background: var(--purple); }
+        .launch-card.red::after { background: var(--red); }
+
+        .launch-card:hover::after { width: 100%; }
+        .launch-card:hover { border-color: rgba(0,245,255,0.5); transform: translateY(-3px); }
+
+        .card-icon {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .card-port {
+            font-size: 0.58rem;
+            letter-spacing: 2px;
+            color: rgba(0,245,255,0.35);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .card-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .card-desc {
+            font-size: 0.62rem;
+            color: rgba(0,245,255,0.45);
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+        }
+
+        .card-status {
+            position: absolute;
+            top: 12px; right: 15px;
+            font-size: 0.55rem;
+            letter-spacing: 2px;
+        }
+
+        .card-status.online { color: var(--green); }
+        .card-status.standby { color: var(--amber); }
+
+        /* TERMINAL */
+        .terminal-section {
+            width: 100%;
+            max-width: 900px;
+            animation: fadeIn 1s ease 0.7s both;
+        }
+
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 15px;
+            background: rgba(0,245,255,0.05);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .terminal-title {
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            color: rgba(0,245,255,0.5);
+            text-transform: uppercase;
+        }
+
+        .terminal-controls { display: flex; gap: 8px; }
+        .t-btn {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .t-btn.close { background: #ff5f56; }
+        .t-btn.min { background: #ffbd2e; }
+        .t-btn.max { background: #27c93f; }
+
+        .terminal-body {
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 0 0 6px 6px;
+            padding: 20px;
+            font-size: 0.72rem;
+            line-height: 1.9;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .terminal-body::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            animation: scan 3s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { top: 0; opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .t-line { display: flex; gap: 10px; }
+        .t-prompt { color: var(--green); }
+        .t-cmd { color: #e0e0e0; }
+        .t-out { color: rgba(0,245,255,0.6); padding-left: 15px; }
+        .t-success { color: var(--green); padding-left: 15px; }
+        .t-warn { color: var(--amber); padding-left: 15px; }
+
+        .t-cursor {
+            display: inline-block;
+            width: 8px; height: 14px;
+            background: var(--cyan);
+            vertical-align: middle;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* METRICS ROW */
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: 20px;
+            animation: fadeIn 1s ease 0.6s both;
+        }
+
+        .metric-card {
+            border: 1px solid rgba(0,245,255,0.1);
+            background: rgba(0,5,10,0.8);
+            border-radius: 4px;
+            padding: 14px 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-label {
+            font-size: 0.55rem;
+            letter-spacing: 3px;
+            color: rgba(0,245,255,0.35);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--cyan);
+        }
+
+        .metric-value.green { color: var(--green); }
+        .metric-value.amber { color: var(--amber); }
+
+        .metric-bar {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 2px;
+            background: var(--cyan);
+            transition: width 2s ease;
+        }
+
+        .metric-bar.green { background: var(--green); }
+        .metric-bar.amber { background: var(--amber); }
+
+        .metric-unit {
+            font-size: 0.6rem;
+            color: rgba(0,245,255,0.3);
+            margin-left: 4px;
+        }
+
+        /* BOTTOM BAR */
+        .bottombar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 28px;
+            background: rgba(0,245,255,0.04);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 1000;
+            font-size: 0.6rem;
+            letter-spacing: 1.5px;
+            color: rgba(0,245,255,0.35);
+        }
+
+        .bottombar-left, .bottombar-right { display: flex; gap: 20px; }
+
+        /* CORNER DECORATIONS */
+        .corner {
+            position: fixed;
+            width: 30px; height: 30px;
+            z-index: 200;
+        }
+
+        .corner.tl { top: 46px; left: 210px; border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+        .corner.tr { top: 46px; right: 210px; border-top: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+        .corner.bl { bottom: 36px; left: 210px; border-bottom: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+        .corner.br { bottom: 36px; right: 210px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+        /* CANVAS BACKGROUND */
+        #bgCanvas {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* NOTIFICATION FLASH */
+        .notif {
+            position: fixed;
+            top: 50px; right: 215px;
+            background: rgba(0,10,20,0.95);
+            border: 1px solid var(--green);
+            border-radius: 4px;
+            padding: 10px 15px;
+            font-size: 0.65rem;
+            color: var(--green);
+            letter-spacing: 1px;
+            z-index: 500;
+            animation: slideIn 0.3s ease, fadeOut 0.5s ease 3s forwards;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; }
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 900px) {
+            .side-panel { display: none; }
+            .main { margin: 36px 0 0; padding: 20px; }
+            .launch-grid { grid-template-columns: 1fr 1fr; }
+            .metrics-row { grid-template-columns: 1fr 1fr; }
+            .corner { display: none; }
+        }
+
+        @media (max-width: 560px) {
+            .launch-grid { grid-template-columns: 1fr; }
+        }
+
+        /* HEXAGON BADGE */
+        .hex-badge {
+            position: absolute;
+            opacity: 0.04;
+            font-size: 12rem;
+            font-family: 'Orbitron', monospace;
+            font-weight: 900;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            letter-spacing: -10px;
+            color: var(--cyan);
+            z-index: 0;
+        }
+
+        /* GLITCH EFFECT */
+        .glitch {
+            position: relative;
+        }
+
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: transparent;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .glitch::before {
+            background: linear-gradient(135deg, var(--red), transparent);
+            animation: glitch1 4s infinite;
+            left: 2px;
+        }
+
+        .glitch::after {
+            background: linear-gradient(135deg, var(--cyan), transparent);
+            animation: glitch2 4s infinite;
+            left: -2px;
+        }
+
+        @keyframes glitch1 {
+            0%, 90%, 100% { clip-path: inset(50% 0 50% 0); }
+            92% { clip-path: inset(10% 0 80% 0); transform: translate(-2px); }
+            94% { clip-path: inset(60% 0 10% 0); }
+            96% { clip-path: inset(30% 0 50% 0); transform: translate(2px); }
+        }
+
+        @keyframes glitch2 {
+            0%, 88%, 100% { clip-path: inset(50% 0 50% 0); }
+            91% { clip-path: inset(70% 0 5% 0); transform: translate(2px); }
+            93% { clip-path: inset(20% 0 60% 0); }
+            95% { clip-path: inset(45% 0 30% 0); transform: translate(-2px); }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="topbar-left">
+        <span style="font-family:'Orbitron',monospace;font-size:0.7rem;color:var(--cyan);letter-spacing:3px;">APEX//OS</span>
+        <span><span class="dot green"></span> CORE ACTIVE</span>
+        <span><span class="dot amber"></span> MODEL SYNC</span>
+        <span><span class="dot green"></span> LOCAL ONLY</span>
+    </div>
+    <div class="topbar-right">
+        <span style="color:rgba(0,245,255,0.4);">NODE: PIXEL_9_TENSOR</span>
+        <span class="topbar-clock" id="clock">--:--:--</span>
+    </div>
+</div>
+
+<!-- LEFT PANEL -->
+<div class="side-panel">
+    <div class="side-label">// MODULES</div>
+    <div class="side-item active">◈ IDE CORE</div>
+    <div class="side-item">◉ AI BRAIN</div>
+    <div class="side-item">◎ FILE SYSTEM</div>
+    <div class="side-item">◈ GIT CONTROL</div>
+    <div class="side-item">◉ DEBUGGER</div>
+    <div class="side-item">◎ EXTENSIONS</div>
+
+    <div class="side-label" style="margin-top:20px;">// AGENTS</div>
+    <div class="side-item">▸ GEMMA-4-LOCAL</div>
+    <div class="side-item">▸ CODE-ASSIST</div>
+    <div class="side-item">▸ REFACTOR-BOT</div>
+
+    <div class="side-label" style="margin-top:20px;">// NETWORK</div>
+    <div class="mini-graph">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="side-panel right">
+    <div class="side-label">// SYS LOG</div>
+    <div id="syslog" style="padding:5px 10px;font-size:0.58rem;line-height:2;color:rgba(0,245,255,0.45);overflow:hidden;flex:1;"></div>
+
+    <div class="side-label">// PROCESSES</div>
+    <div class="side-item">apex-server <span style="float:right;color:var(--green)">◈ 12%</span></div>
+    <div class="side-item">ollama <span style="float:right;color:var(--amber)">◈ 34%</span></div>
+    <div class="side-item">lsp-daemon <span style="float:right;color:var(--green)">◈ 3%</span></div>
+    <div class="side-item">git-watcher <span style="float:right;color:var(--green)">◈ 1%</span></div>
+    <div class="side-item">tensor-bridge <span style="float:right;color:var(--cyan)">◈ 8%</span></div>
+</div>
+
+<!-- CORNERS -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- MAIN -->
+<main class="main">
+
+    <div class="hex-badge">⬡</div>
+
+    <!-- HERO -->
+    <div class="hero">
+        <div class="hero-tag">STAR-KIN LABS // SOVEREIGN SYSTEM</div>
+        <h1 class="hero-title glitch" data-text="APEX UNIVERSE">APEX UNIVERSE</h1>
+        <div class="hero-sub">Advanced Local Intelligence Development Environment</div>
+        <div class="hero-version">
+            v3.7.1 &nbsp;|&nbsp; GEMMA 4 CORE &nbsp;|&nbsp; FULLY OFFLINE &nbsp;|&nbsp; SOVEREIGN MODE
+        </div>
+    </div>
+
+    <!-- STATUS CHIPS -->
+    <div class="status-row">
+        <div class="status-chip ok"><span class="chip-dot"></span>SYSTEM OPERATIONAL</div>
+        <div class="status-chip ok"><span class="chip-dot"></span>MODEL LOADED</div>
+        <div class="status-chip info"><span class="chip-dot"></span>PORT 8080 READY</div>
+        <div class="status-chip ok"><span class="chip-dot"></span>OLLAMA :11434</div>
+        <div class="status-chip warn"><span class="chip-dot"></span>TENSOR WARM</div>
+        <div class="status-chip ok"><span class="chip-dot"></span>ZERO TELEMETRY</div>
+    </div>
+
+    <!-- METRICS -->
+    <div class="metrics-row">
+        <div class="metric-card">
+            <div class="metric-label">CPU Load</div>
+            <div class="metric-value amber" id="cpu-val">24<span class="metric-unit">%</span></div>
+            <div class="metric-bar amber" id="cpu-bar" style="width:24%"></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">RAM Used</div>
+            <div class="metric-value green" id="ram-val">4.2<span class="metric-unit">GB</span></div>
+            <div class="metric-bar green" style="width:52%"></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Model Latency</div>
+            <div class="metric-value" id="lat-val">142<span class="metric-unit">ms</span></div>
+            <div class="metric-bar" style="width:14%"></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Sessions</div>
+            <div class="metric-value green">1<span class="metric-unit">active</span></div>
+            <div class="metric-bar green" style="width:10%"></div>
+        </div>
+    </div>
+
+    <!-- LAUNCH GRID -->
+    <div class="launch-grid">
+        <a href="http://localhost:8080" class="launch-card cyan" onclick="notify('Launching IDE Core...')">
+            <span class="card-status online">● ONLINE</span>
+            <span class="card-icon">⌨</span>
+            <div class="card-port">localhost:8080</div>
+            <div class="card-title">Code Editor</div>
+            <div class="card-desc">Full syntax IDE. Multi-tab workspace. AI inline completion. Local LSP daemon.</div>
+        </a>
+
+        <a href="http://localhost:11434" class="launch-card green" onclick="notify('Connecting to AI Brain...')">
+            <span class="card-status online">● ONLINE</span>
+            <span class="card-icon">◈</span>
+            <div class="card-port">localhost:11434</div>
+            <div class="card-title">AI Brain</div>
+            <div class="card-desc">Ollama runtime. Gemma 4 model. Local inference. Zero cloud dependency.</div>
+        </a>
+
+        <a href="http://localhost:3000" class="launch-card amber" onclick="notify('Opening File Manager...')">
+            <span class="card-status standby">◎ STANDBY</span>
+            <span class="card-icon">◎</span>
+            <div class="card-port">localhost:3000</div>
+            <div class="card-title">File System</div>
+            <div class="card-desc">Project tree browser. Diff viewer. Smart file indexer. Watcher daemon.</div>
+        </a>
+
+        <a href="http://localhost:9229" class="launch-card purple" onclick="notify('Starting Debugger...')">
+            <span class="card-status standby">◎ STANDBY</span>
+            <span class="card-icon">⚙</span>
+            <div class="card-port">localhost:9229</div>
+            <div class="card-title">Debugger</div>
+            <div class="card-desc">Breakpoints. Call stack. Memory inspector. Live variable watch.</div>
+        </a>
+
+        <a href="http://localhost:4000" class="launch-card cyan" onclick="notify('Opening Git Control...')">
+            <span class="card-status standby">◎ STANDBY</span>
+            <span class="card-icon">⎇</span>
+            <div class="card-port">localhost:4000</div>
+            <div class="card-title">Git Control</div>
+            <div class="card-desc">Branch visualizer. Commit graph. Diff staging. Local history.</div>
+        </a>
+
+        <a href="http://localhost:5500" class="launch-card red" onclick="notify('Launching Live Preview...')">
+            <span class="card-status online">● LIVE</span>
+            <span class="card-icon">▶</span>
+            <div class="card-port">localhost:5500</div>
+            <div class="card-title">Live Preview</div>
+            <div class="card-desc">Hot-reload preview. HMR enabled. Tensor hardware bridge active.</div>
+        </a>
+    </div>
+
+    <!-- TERMINAL -->
+    <div class="terminal-section">
+        <div class="terminal-header">
+            <span class="terminal-title">// APEX TERMINAL — SYSTEM LOG</span>
+            <div class="terminal-controls">
+                <div class="t-btn close"></div>
+                <div class="t-btn min"></div>
+                <div class="t-btn max"></div>
+            </div>
+        </div>
+        <div class="terminal-body" id="terminal">
+            <div class="t-line"><span class="t-prompt">apex@sovereign:~$</span><span class="t-cmd">system --init --mode=local</span></div>
+            <div class="t-line t-success">  ✓ APEX UNIVERSE v3.7.1 initialized</div>
+            <div class="t-line t-out">  → boot_sequence: kernel_loaded | runtime_ready</div>
+            <div class="t-line"><span class="t-prompt">apex@sovereign:~$</span><span class="t-cmd">ollama pull gemma4:latest</span></div>
+            <div class="t-line t-success">  ✓ model_cache: gemma4 [8.1GB] — verified</div>
+            <div class="t-line t-out">  → context_window: 128K | quantization: Q4_K_M</div>
+            <div class="t-line"><span class="t-prompt">apex@sovereign:~$</span><span class="t-cmd">bridge --device pixel_9 --tensor</span></div>
+            <div class="t-line t-success">  ✓ hardware_bridge: pixel_9_tensor_connected</div>
+            <div class="t-line t-out">  → tensor_tflops: 1.4 | thermal: nominal</div>
+            <div class="t-line"><span class="t-prompt">apex@sovereign:~$</span><span class="t-cmd">apex-server --port 8080 --ai-assist --silent</span></div>
+            <div class="t-line t-success">  ✓ local_server: running on :8080</div>
+            <div class="t-line t-out">  → lsp_daemon: active | git_watcher: watching</div>
+            <div class="t-line t-warn">  ⚠ telemetry: DISABLED — full sovereign mode</div>
+            <div class="t-line"><span class="t-prompt">apex@sovereign:~$</span><span class="t-cmd" id="live-cmd"></span><span class="t-cursor"></span></div>
+        </div>
+    </div>
+
+</main>
+
+<!-- BOTTOM BAR -->
+<div class="bottombar">
+    <div class="bottombar-left">
+        <span>APEX//UNIVERSE</span>
+        <span>STAR-KIN LABS © 2025</span>
+        <span style="color:var(--green)">SOVEREIGN — ZERO CLOUD</span>
+    </div>
+    <div class="bottombar-right">
+        <span>NODE: PIXEL_9</span>
+        <span>MODEL: GEMMA-4</span>
+        <span id="uptime">UPTIME: --</span>
+    </div>
+</div>
+
+<script>
+    // CLOCK
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent =
+            now.toTimeString().slice(0,8);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // UPTIME
+    let seconds = 0;
+    setInterval(() => {
+        seconds++;
+        const h = String(Math.floor(seconds/3600)).padStart(2,'0');
+        const m = String(Math.floor((seconds%3600)/60)).padStart(2,'0');
+        const s = String(seconds%60).padStart(2,'0');
+        document.getElementById('uptime').textContent = `UPTIME: ${h}:${m}:${s}`;
+    }, 1000);
+
+    // NOTIFICATION
+    function notify(msg) {
+        const el = document.createElement('div');
+        el.className = 'notif';
+        el.textContent = '▸ ' + msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 3500);
+    }
+
+    // LIVE TERMINAL COMMAND
+    const cmds = [
+        'watch --cpu --mem --interval 1s',
+        'model status --verbose',
+        'lsp --ping',
+        'git log --oneline -5',
+        'apex --health-check',
+    ];
+    let cmdIdx = 0;
+    function typeLiveCmd() {
+        const el = document.getElementById('live-cmd');
+        const cmd = cmds[cmdIdx % cmds.length];
+        cmdIdx++;
+        let i = 0;
+        el.textContent = '';
+        const t = setInterval(() => {
+            el.textContent += cmd[i];
+            i++;
+            if (i >= cmd.length) {
+                clearInterval(t);
+                setTimeout(typeLiveCmd, 4000);
+            }
+        }, 60);
+    }
+    setTimeout(typeLiveCmd, 1500);
+
+    // SYS LOG
+    const logs = [
+        '✓ lsp: heartbeat ok',
+        '✓ ollama: inference ready',
+        '→ git: no changes',
+        '✓ port 8080: alive',
+        '→ tensor: nominal',
+        '✓ model: context ready',
+        '⚠ cache: 78% full',
+        '✓ bridge: connected',
+        '→ memory: 4.2GB/8GB',
+        '✓ zero telemetry',
+    ];
+    let logIdx = 0;
+    const logEl = document.getElementById('syslog');
+    setInterval(() => {
+        const entry = document.createElement('div');
+        entry.textContent = logs[logIdx % logs.length];
+        entry.style.color = logs[logIdx % logs.length].includes('⚠') ? 'var(--amber)' : 'rgba(0,245,255,0.45)';
+        logIdx++;
+        logEl.appendChild(entry);
+        if (logEl.children.length > 8) logEl.removeChild(logEl.firstChild);
+    }, 2000);
+
+    // METRIC ANIMATION
+    function randomFluctuate(base, range) {
+        return Math.max(0, Math.min(100, base + (Math.random()-0.5)*range));
+    }
+
+    setInterval(() => {
+        const cpu = randomFluctuate(24, 15).toFixed(0);
+        document.getElementById('cpu-val').innerHTML = cpu + '<span class="metric-unit">%</span>';
+        document.getElementById('cpu-bar').style.width = cpu + '%';
+
+        const lat = randomFluctuate(142, 40).toFixed(0);
+        document.getElementById('lat-val').innerHTML = lat + '<span class="metric-unit">ms</span>';
+    }, 2000);
+
+    // BG CANVAS — PARTICLE NETWORK
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const particles = Array.from({length: 60}, () => ({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        vx: (Math.random()-0.5)*0.3,
+        vy: (Math.random()-0.5)*0.3,
+        r: Math.random()*1.5+0.5,
+    }));
+
+    function drawBg() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0) p.x = canvas.width;
+            if (p.x > canvas.width) p.x = 0;
+            if (p.y < 0) p.y = canvas.height;
+            if (p.y > canvas.height) p.y = 0;
+        });
+
+        // CONNECTIONS
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i+1; j < particles.length; j++) {
+                const dx = particles[i].x - particles[j].x;
+                const dy = particles[i].y - particles[j].y;
+                const dist = Math.sqrt(dx*dx+dy*dy);
+                if (dist < 120) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(0,245,255,${0.12*(1-dist/120)})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // DOTS
+        particles.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(0,245,255,0.4)';
+            ctx.fill();
+        });
+
+        requestAnimationFrame(drawBg);
+    }
+    drawBg();
+
+    // MINI GRAPH
+    const gc = document.getElementById('graphCanvas');
+    if (gc) {
+        gc.width = 168;
+        gc.height = 50;
+        const gctx = gc.getContext('2d');
+        const hist = Array.from({length: 30}, () => Math.random()*40+10);
+
+        setInterval(() => {
+            hist.shift();
+            hist.push(Math.random()*40+10);
+
+            gctx.clearRect(0,0,168,50);
+            gctx.beginPath();
+            hist.forEach((v, i) => {
+                const x = (i/29)*168;
+                const y = 50 - (v/70)*50;
+                i === 0 ? gctx.moveTo(x,y) : gctx.lineTo(x,y);
+            });
+            gctx.strokeStyle = 'rgba(0,245,255,0.6)';
+            gctx.lineWidth = 1;
+            gctx.stroke();
+        }, 500);
+    }
+</script>
+</body>
+</html>
